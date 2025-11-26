@@ -1,12 +1,15 @@
 {
-  "name": "cartographer",
-  "version": "1.0.0",
+  "name": "@vyshnavsdeepak/cartographer",
+  "version": "0.1.0",
   "description": "MCP server providing AI agents with a queryable architecture graph",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "cartographer": "./dist/cli/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "imports": {
     "#types": "./dist/types/index.js",
     "#graph/*": "./dist/graph/*.js",
@@ -18,11 +21,23 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest",
+    "prepublishOnly": "pnpm build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "mcp",
+    "ai",
+    "architecture",
+    "graph",
+    "codebase",
+    "cli"
+  ],
+  "author": "vyshnavsdeepak",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vyshnavsdeepak/cartographer"
+  },
   "packageManager": "pnpm@10.6.1",
   "devDependencies": {
     "@types/node": "^24.10.1",

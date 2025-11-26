@@ -143,4 +143,4 @@ pnpm build
 
 ## License
 
-MIT
+[MIT](LICENSE)
