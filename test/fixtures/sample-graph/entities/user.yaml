@@ -23,3 +23,14 @@ fields:
       - inactive
       - suspended
     default: active
+
+code_refs:
+  model:
+    anchor: "@graph:User.model"
+    description: Class definition
+  types:
+    anchor: "@graph:User.types"
+    description: TypeScript types
+  validation:
+    anchor: "@graph:User.validation"
+    description: Validation function

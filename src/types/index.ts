@@ -27,16 +27,32 @@ export const FieldSchema = z.object({
   values: z.array(z.string()).optional(),
 });
 
+// Code reference - points to an anchor
+export const CodeRefSchema = z.object({
+  anchor: z.string(),
+  description: z.string().optional(),
+});
+
 // An entity definition
 export const EntitySchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   fields: z.array(FieldSchema),
+  code_refs: z
+    .object({
+      model: CodeRefSchema.optional(),
+      schema: CodeRefSchema.optional(),
+      types: CodeRefSchema.optional(),
+      validation: CodeRefSchema.optional(),
+      api: z.array(CodeRefSchema).optional(),
+    })
+    .optional(),
 });
 
 // Infer TypeScript types from schemas
 export type FieldType = z.infer<typeof FieldTypeSchema>;
 export type Field = z.infer<typeof FieldSchema>;
+export type CodeRef = z.infer<typeof CodeRefSchema>;
 export type Entity = z.infer<typeof EntitySchema>;
 
 // Anchor types - for code references
