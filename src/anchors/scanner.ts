@@ -14,11 +14,12 @@ const ANCHOR_REGEX = new RegExp(
 const END_REGEX = /(?:\/\/|#)\s*@end:([\w.]+)/i;
 
 /**
- * Scan a file for anchor comments and extract their content
+ * Scan content string for anchor comments (for testing)
  */
-export async function scanFile(filePath: string): Promise<ResolvedAnchor[]> {
-  const absolutePath = resolve(filePath);
-  const content = await readFile(absolutePath, "utf-8");
+export function scanContent(
+  content: string,
+  filePath = "<inline>"
+): ResolvedAnchor[] {
   const lines = content.split("\n");
   const anchors: ResolvedAnchor[] = [];
 
@@ -27,19 +28,32 @@ export async function scanFile(filePath: string): Promise<ResolvedAnchor[]> {
 
     if (match?.[1]) {
       const anchorName = match[1];
-      const { content, endLine } = extractContent(lines, i, anchorName);
+      const { content: blockContent, endLine } = extractContent(
+        lines,
+        i,
+        anchorName
+      );
 
       anchors.push({
         anchor: anchorName,
-        file: absolutePath,
+        file: filePath,
         line: i + 1, // 1-indexed
         endLine: endLine + 1,
-        content,
+        content: blockContent,
       });
     }
   }
 
   return anchors;
+}
+
+/**
+ * Scan a file for anchor comments and extract their content
+ */
+export async function scanFile(filePath: string): Promise<ResolvedAnchor[]> {
+  const absolutePath = resolve(filePath);
+  const content = await readFile(absolutePath, "utf-8");
+  return scanContent(content, absolutePath);
 }
 
 /**
