@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -19,7 +19,8 @@
   "packageManager": "pnpm@10.6.1",
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
   },
   "dependencies": {
     "yaml": "^2.8.1",
