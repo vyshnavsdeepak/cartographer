@@ -1,13 +1,20 @@
 {
   "name": "cartographer",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "MCP server providing AI agents with a queryable architecture graph",
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.6.1"
+  "packageManager": "pnpm@10.6.1",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
 }
