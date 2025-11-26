@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       "#types": path.resolve(__dirname, "./src/types/index.ts"),
       "#graph": path.resolve(__dirname, "./src/graph"),
+      "#anchors": path.resolve(__dirname, "./src/anchors"),
     },
   },
 });

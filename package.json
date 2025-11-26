@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "imports": {
     "#types": "./dist/types/index.js",
-    "#graph/*": "./dist/graph/*.js"
+    "#graph/*": "./dist/graph/*.js",
+    "#anchors/*": "./dist/anchors/*.js"
   },
   "scripts": {
     "build": "tsc",

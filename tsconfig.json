@@ -7,7 +7,8 @@
     "baseUrl": "./src",
     "paths": {
       "#types": ["./types/index.ts"],
-      "#graph/*": ["./graph/*.ts"]
+      "#graph/*": ["./graph/*.ts"],
+      "#anchors/*": ["./anchors/*.ts"]
     },
 
     // Environment Settings

@@ -38,3 +38,19 @@ export const EntitySchema = z.object({
 export type FieldType = z.infer<typeof FieldTypeSchema>;
 export type Field = z.infer<typeof FieldSchema>;
 export type Entity = z.infer<typeof EntitySchema>;
+
+// Anchor types - for code references
+
+/** A resolved anchor found in source code */
+export interface ResolvedAnchor {
+  /** The anchor identifier, e.g., "@graph:User.model" */
+  anchor: string;
+  /** Absolute path to the file */
+  file: string;
+  /** Line number where anchor comment appears (1-indexed) */
+  line: number;
+  /** Line number where the anchored block ends */
+  endLine: number;
+  /** The code content following the anchor */
+  content: string;
+}
