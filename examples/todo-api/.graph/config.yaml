@@ -1,0 +1,3 @@
+# Cartographer configuration for Todo API example
+sourceRoots:
+  - src

@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cartographer.dev/schemas/entity.json",
+  "title": "Cartographer Entity",
+  "description": "Schema for Cartographer entity definitions in .graph/entities/*.yaml",
+  "type": "object",
+  "required": ["name", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Entity name (e.g., 'User', 'Order')",
+      "pattern": "^[A-Z][a-zA-Z0-9]*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the entity"
+    },
+    "fields": {
+      "type": "array",
+      "description": "Field definitions for this entity",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/field"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Relations to other entities",
+      "items": {
+        "$ref": "#/definitions/relation"
+      }
+    },
+    "code_refs": {
+      "type": "object",
+      "description": "References to code anchors",
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/codeRef"
+        },
+        "schema": {
+          "$ref": "#/definitions/codeRef"
+        },
+        "types": {
+          "$ref": "#/definitions/codeRef"
+        },
+        "validation": {
+          "$ref": "#/definitions/codeRef"
+        },
+        "api": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/codeRef"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/codeRef"
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "field": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field data type",
+          "enum": ["uuid", "string", "text", "integer", "decimal", "boolean", "timestamp", "date", "json", "enum"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description"
+        },
+        "primary": {
+          "type": "boolean",
+          "description": "Is this the primary key?",
+          "default": false
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "Must values be unique?",
+          "default": false
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Can this field be null?",
+          "default": false
+        },
+        "default": {
+          "description": "Default value for this field"
+        },
+        "values": {
+          "type": "array",
+          "description": "Allowed values for enum type",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "type": { "const": "enum" }
+        }
+      },
+      "then": {
+        "required": ["values"]
+      }
+    },
+    "relation": {
+      "type": "object",
+      "required": ["name", "entity", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Relation name (e.g., 'author', 'posts')",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "entity": {
+          "type": "string",
+          "description": "Target entity name",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Relation type",
+          "enum": ["belongs_to", "has_one", "has_many", "many_to_many"]
+        },
+        "foreign_key": {
+          "type": "string",
+          "description": "Foreign key field name",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "through": {
+          "type": "string",
+          "description": "Join table for many_to_many relations",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description"
+        }
+      }
+    },
+    "codeRef": {
+      "type": "object",
+      "required": ["anchor"],
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "type": "string",
+          "description": "Anchor identifier (e.g., '@graph:User.model')",
+          "pattern": "^@graph:[A-Z][a-zA-Z0-9]*\\.[a-z]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what this code reference points to"
+        }
+      }
+    }
+  }
+}

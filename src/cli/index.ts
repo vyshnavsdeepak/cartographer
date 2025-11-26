@@ -92,13 +92,15 @@ fields:
   console.log(`  3. Run: ${c.cyan(`cartographer scan`)}`);
 }
 
-async function scan() {
+async function scan(quiet = false) {
   const graphPath = join(process.cwd(), GRAPH_DIR);
 
   if (!existsSync(graphPath)) {
-    console.log(c.red(`✗ No ${GRAPH_DIR}/ found`));
-    console.log(c.dim(`\n  Initialize Cartographer first:`));
-    console.log(c.dim(`  cartographer init`));
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    if (!quiet) {
+      console.error(c.dim(`\n  Initialize Cartographer first:`));
+      console.error(c.dim(`  cartographer init`));
+    }
     process.exit(1);
   }
 
@@ -107,28 +109,34 @@ async function scan() {
 
   const loadErrors = graph.getLoadErrors();
   if (loadErrors.length > 0) {
-    console.log(c.red(`\n✗ Failed to load some entities:`));
+    console.error(c.red(`✗ Failed to load some entities:`));
     for (const err of loadErrors) {
       const relPath = relative(process.cwd(), err.file);
-      console.log(c.red(`  ${relPath}`));
-      console.log(c.dim(`    ${err.error.message.split("\n")[0]}`));
+      console.error(c.red(`  ${relPath}`));
+      if (!quiet) {
+        console.error(c.dim(`    ${err.error.message.split("\n")[0]}`));
+      }
     }
   }
 
   const relationErrors = graph.getRelationErrors();
   if (relationErrors.length > 0) {
-    console.log(c.red(`\n✗ Invalid relations (referencing non-existent entities):`));
+    console.error(c.red(`✗ Invalid relations (referencing non-existent entities):`));
     for (const err of relationErrors) {
-      console.log(c.red(`  ${err.entity}.${err.relation} → ${err.referencedEntity}`));
-      console.log(c.dim(`    Create ${GRAPH_DIR}/entities/${err.referencedEntity.toLowerCase()}.yaml or fix the relation`));
+      console.error(c.red(`  ${err.entity}.${err.relation} → ${err.referencedEntity}`));
+      if (!quiet) {
+        console.error(c.dim(`    Create ${GRAPH_DIR}/entities/${err.referencedEntity.toLowerCase()}.yaml or fix the relation`));
+      }
     }
   }
 
   const entities = graph.getAllEntities();
   if (entities.length === 0) {
-    console.log(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
-    console.log(c.dim(`\n  Create an entity definition:`));
-    console.log(c.dim(`  ${GRAPH_DIR}/entities/user.yaml`));
+    console.error(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    if (!quiet) {
+      console.error(c.dim(`\n  Create an entity definition:`));
+      console.error(c.dim(`  ${GRAPH_DIR}/entities/user.yaml`));
+    }
     process.exit(1);
   }
 
@@ -139,9 +147,11 @@ async function scan() {
     .filter(existsSync);
 
   if (sourceRoots.length === 0) {
-    console.log(c.red(`✗ No source directories found`));
-    console.log(c.dim(`\n  Configured roots: ${config.sourceRoots.join(", ")}`));
-    console.log(c.dim(`  Update sourceRoots in: ${GRAPH_DIR}/${CONFIG_FILE}`));
+    console.error(c.red(`✗ No source directories found`));
+    if (!quiet) {
+      console.error(c.dim(`\n  Configured roots: ${config.sourceRoots.join(", ")}`));
+      console.error(c.dim(`  Update sourceRoots in: ${GRAPH_DIR}/${CONFIG_FILE}`));
+    }
     process.exit(1);
   }
 
@@ -152,37 +162,46 @@ async function scan() {
   const totalAnchors = status.resolved.reduce((sum, r) => sum + r.anchors.size, 0);
   const totalMissing = status.resolved.reduce((sum, r) => sum + r.missing.length, 0);
 
-  console.log(`\n${c.bold("Scan Results")}`);
-  console.log(`  Entities: ${c.cyan(String(entities.length))}`);
-  console.log(`  Anchors:  ${c.cyan(String(totalAnchors))}`);
+  // Only show summary in non-quiet mode
+  if (!quiet) {
+    console.log(`\n${c.bold("Scan Results")}`);
+    console.log(`  Entities: ${c.cyan(String(entities.length))}`);
+    console.log(`  Anchors:  ${c.cyan(String(totalAnchors))}`);
+  }
 
   if (totalMissing > 0) {
-    console.log(c.red(`\n✗ Missing anchors (defined in graph, not found in code):`));
+    console.error(c.red(`✗ Missing anchors (defined in graph, not found in code):`));
     for (const resolved of status.resolved) {
       if (resolved.missing.length > 0) {
         for (const anchor of resolved.missing) {
-          console.log(c.red(`  ${anchor}`));
-          // Suggest how to fix
-          const [entity, category] = anchor.replace("@graph:", "").split(".");
-          console.log(c.dim(`    Add this comment to your code where ${entity} ${category} is defined:`));
-          console.log(c.dim(`    // ${anchor}`));
+          console.error(c.red(`  ${anchor}`));
+          if (!quiet) {
+            // Suggest how to fix
+            const [entity, category] = anchor.replace("@graph:", "").split(".");
+            console.error(c.dim(`    Add this comment to your code where ${entity} ${category} is defined:`));
+            console.error(c.dim(`    // ${anchor}`));
+          }
         }
       }
     }
   }
 
   if (status.orphanedAnchors.length > 0) {
-    console.log(c.yellow(`\n? Orphaned anchors (in code but not referenced in graph):`));
+    console.error(c.yellow(`? Orphaned anchors (in code but not referenced in graph):`));
     for (const anchor of status.orphanedAnchors) {
-      const relPath = relative(process.cwd(), anchor.file);
-      console.log(c.yellow(`  ${anchor.anchor}`));
-      console.log(c.dim(`    ${relPath}:${anchor.line}`));
+      console.error(c.yellow(`  ${anchor.anchor}`));
+      if (!quiet) {
+        const relPath = relative(process.cwd(), anchor.file);
+        console.error(c.dim(`    ${relPath}:${anchor.line}`));
+      }
     }
   }
 
   const hasErrors = totalMissing > 0 || status.orphanedAnchors.length > 0 || loadErrors.length > 0 || relationErrors.length > 0;
   if (!hasErrors) {
-    console.log(c.green(`\n✓ All anchors in sync`));
+    if (!quiet) {
+      console.log(c.green(`\n✓ All anchors in sync`));
+    }
   } else {
     process.exit(1);
   }
@@ -210,29 +229,36 @@ async function serve() {
 function help() {
   console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
-${c.bold("Usage:")} cartographer <command>
+${c.bold("Usage:")} cartographer <command> [options]
 
 ${c.bold("Commands:")}
-  ${c.cyan("init")}    Initialize .graph/ in current directory
-  ${c.cyan("scan")}    Verify anchors match graph definitions
-  ${c.cyan("serve")}   Start MCP server for AI assistants
+  ${c.cyan("init")}              Initialize .graph/ in current directory
+  ${c.cyan("scan")} [--quiet]    Verify anchors match graph definitions
+  ${c.cyan("serve")}             Start MCP server for AI assistants
+
+${c.bold("Options:")}
+  ${c.cyan("--quiet, -q")}       Minimal output (errors only), useful for CI/hooks
 
 ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
   ${c.dim("$")} cartographer scan
+  ${c.dim("$")} cartographer scan --quiet
   ${c.dim("$")} cartographer serve
 `);
 }
 
 // Main
-const command = process.argv[2];
+const args = process.argv.slice(2);
+const command = args[0];
+const flags = new Set(args.slice(1));
+const quiet = flags.has("--quiet") || flags.has("-q");
 
 switch (command) {
   case "init":
     init();
     break;
   case "scan":
-    scan();
+    scan(quiet);
     break;
   case "serve":
     serve();

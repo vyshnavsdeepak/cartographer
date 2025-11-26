@@ -1,0 +1,74 @@
+name: Todo
+description: A todo item belonging to a user
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+    description: Unique identifier
+
+  - name: title
+    type: string
+    description: Todo title
+
+  - name: description
+    type: text
+    nullable: true
+    description: Optional detailed description
+
+  - name: completed
+    type: boolean
+    default: false
+    description: Completion status
+
+  - name: due_date
+    type: date
+    nullable: true
+    description: Optional due date
+
+  - name: priority
+    type: enum
+    values: [low, medium, high]
+    default: medium
+    description: Priority level
+
+  - name: user_id
+    type: uuid
+    description: Foreign key to User
+
+  - name: category_id
+    type: uuid
+    nullable: true
+    description: Foreign key to Category
+
+  - name: created_at
+    type: timestamp
+    description: Creation timestamp
+
+  - name: updated_at
+    type: timestamp
+    description: Last update timestamp
+
+relations:
+  - name: user
+    entity: User
+    type: belongs_to
+    foreign_key: user_id
+    description: Owner of this todo
+
+  - name: category
+    entity: Category
+    type: belongs_to
+    foreign_key: category_id
+    description: Category this todo belongs to
+
+code_refs:
+  model:
+    anchor: "@graph:Todo.model"
+    description: Prisma model definition
+  schema:
+    anchor: "@graph:Todo.schema"
+    description: Zod validation schema
+  api:
+    - anchor: "@graph:Todo.api"
+      description: REST API endpoints

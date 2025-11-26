@@ -165,13 +165,13 @@ describe("CLI", () => {
       const result = await runCli(["scan"], testDir);
 
       expect(result.code).toBe(1);
-      expect(result.stdout).toContain("No .graph/ found");
+      expect(result.stderr).toContain("No .graph/ found");
     });
 
     it("suggests init command on missing .graph", async () => {
       const result = await runCli(["scan"], testDir);
 
-      expect(result.stdout).toContain("cartographer init");
+      expect(result.stderr).toContain("cartographer init");
     });
 
     it("scans successfully with valid setup", async () => {
@@ -232,8 +232,8 @@ code_refs:
       const result = await runCli(["scan"], testDir);
 
       expect(result.code).toBe(1);
-      expect(result.stdout).toContain("Missing anchors");
-      expect(result.stdout).toContain("@graph:User.model");
+      expect(result.stderr).toContain("Missing anchors");
+      expect(result.stderr).toContain("@graph:User.model");
     });
 
     it("shows entity count", async () => {

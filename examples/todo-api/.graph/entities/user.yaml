@@ -1,0 +1,43 @@
+name: User
+description: Application user account
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+    description: Unique identifier
+
+  - name: email
+    type: string
+    unique: true
+    description: User's email address
+
+  - name: name
+    type: string
+    description: Display name
+
+  - name: created_at
+    type: timestamp
+    description: Account creation timestamp
+
+relations:
+  - name: todos
+    entity: Todo
+    type: has_many
+    description: User's todo items
+
+  - name: categories
+    entity: Category
+    type: has_many
+    description: User's custom categories
+
+code_refs:
+  model:
+    anchor: "@graph:User.model"
+    description: Prisma model definition
+  schema:
+    anchor: "@graph:User.schema"
+    description: Zod validation schema
+  api:
+    - anchor: "@graph:User.api"
+      description: REST API endpoints

@@ -1,0 +1,16 @@
+{
+  "name": "todo-api-example",
+  "version": "1.0.0",
+  "description": "Example Todo API demonstrating Cartographer integration",
+  "type": "module",
+  "scripts": {
+    "scan": "cartographer scan",
+    "serve": "cartographer serve"
+  },
+  "devDependencies": {
+    "cartographer": "file:../.."
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  }
+}

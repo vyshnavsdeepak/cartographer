@@ -1,0 +1,42 @@
+name: Category
+description: A category for organizing todos
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+    description: Unique identifier
+
+  - name: name
+    type: string
+    description: Category name
+
+  - name: color
+    type: string
+    default: "#808080"
+    description: Hex color code for UI display
+
+  - name: user_id
+    type: uuid
+    description: Foreign key to User
+
+  - name: created_at
+    type: timestamp
+    description: Creation timestamp
+
+relations:
+  - name: user
+    entity: User
+    type: belongs_to
+    foreign_key: user_id
+    description: Owner of this category
+
+  - name: todos
+    entity: Todo
+    type: has_many
+    description: Todos in this category
+
+code_refs:
+  model:
+    anchor: "@graph:Category.model"
+    description: Prisma model definition
