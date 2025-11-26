@@ -117,8 +117,8 @@ Then AI can query:
 - [x] YAML loader for entity definitions
 - [x] Anchor scanner for source files
 - [x] Graph + Anchor resolver (wiring them together)
-- [ ] MCP server with tools
-- [ ] CLI commands (init, scan, serve)
+- [x] MCP server with tools
+- [x] CLI commands (init, scan, serve)
 
 See [GitHub Issues](https://github.com/vyshnavsdeepak/cartographer/issues) for detailed roadmap.
 
