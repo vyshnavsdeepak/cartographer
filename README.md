@@ -116,7 +116,7 @@ Then AI can query:
 - [x] Entity schema with Zod validation
 - [x] YAML loader for entity definitions
 - [x] Anchor scanner for source files
-- [ ] Graph + Anchor resolver (wiring them together)
+- [x] Graph + Anchor resolver (wiring them together)
 - [ ] MCP server with tools
 - [ ] CLI commands (init, scan, serve)
 
