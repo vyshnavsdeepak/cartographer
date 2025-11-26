@@ -1,5 +1,5 @@
 {
-  "name": "@vyshnavsdeepak/cartographer",
+  "name": "mcp-cartographer",
   "version": "0.1.0",
   "description": "MCP server providing AI agents with a queryable architecture graph",
   "type": "module",
