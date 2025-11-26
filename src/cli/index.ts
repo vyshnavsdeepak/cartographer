@@ -88,7 +88,7 @@ fields:
   console.log(`  └─ config.yaml`);
   console.log(c.bold(`\nNext steps:`));
   console.log(`  1. Edit ${c.cyan(`${GRAPH_DIR}/entities/`)} to define your entities`);
-  console.log(`  2. Add ${c.cyan(`// @graph:Entity.category`)} comments to your code`);
+  console.log(`  2. Add ${c.cyan("// @" + "graph:YourEntity.model")} comments to your code`);
   console.log(`  3. Run: ${c.cyan(`cartographer scan`)}`);
 }
 

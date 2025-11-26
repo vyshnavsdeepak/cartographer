@@ -1,0 +1,26 @@
+name: Entity
+description: Core data structure representing an architectural entity
+
+fields:
+  - name: name
+    type: string
+    description: Entity name (e.g., "User", "Order")
+  - name: description
+    type: string
+    nullable: true
+  - name: fields
+    type: json
+    description: Array of field definitions
+  - name: relations
+    type: json
+    nullable: true
+    description: Array of relations to other entities
+  - name: code_refs
+    type: json
+    nullable: true
+    description: References to code anchors
+
+code_refs:
+  types:
+    anchor: "@graph:Entity.types"
+    description: Zod schema and TypeScript types

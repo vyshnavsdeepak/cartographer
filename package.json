@@ -21,7 +21,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "pretest": "tsc",
     "test": "vitest",
+    "test:unit": "vitest --run --exclude=test/cli/**",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [

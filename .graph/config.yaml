@@ -1,0 +1,4 @@
+# Cartographer configuration for dogfooding
+# We use Cartographer to document our own architecture
+sourceRoots:
+  - src

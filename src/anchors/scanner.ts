@@ -4,7 +4,8 @@ import type { ResolvedAnchor } from "#types";
 
 const ANCHOR_PREFIX = "@graph:";
 
-// Matches: // @graph:Entity.category or # @graph:Entity.category
+// Matches patterns like: `// @​graph:User.model` or `# @​graph:Order.api`
+// (zero-width space used in comment to prevent self-matching)
 const ANCHOR_REGEX = new RegExp(
   `(?:\\/\\/|#)\\s*(${ANCHOR_PREFIX.replace(":", "\\:")}[\\w.]+)`,
   "i"

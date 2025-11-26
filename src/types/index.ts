@@ -51,6 +51,7 @@ export const RelationSchema = z.object({
   description: z.string().optional(),
 });
 
+// @graph:Entity.types
 // An entity definition
 export const EntitySchema = z.object({
   name: z.string(),
@@ -75,6 +76,7 @@ export type CodeRef = z.infer<typeof CodeRefSchema>;
 export type RelationType = z.infer<typeof RelationTypeSchema>;
 export type Relation = z.infer<typeof RelationSchema>;
 export type Entity = z.infer<typeof EntitySchema>;
+// @end:Entity.types
 
 // Anchor types - for code references
 
