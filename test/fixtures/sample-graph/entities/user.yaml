@@ -1,0 +1,25 @@
+name: User
+description: Application user account
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+    description: Unique identifier
+
+  - name: email
+    type: string
+    unique: true
+    description: User email address
+
+  - name: name
+    type: string
+    description: Display name
+
+  - name: status
+    type: enum
+    values:
+      - active
+      - inactive
+      - suspended
+    default: active

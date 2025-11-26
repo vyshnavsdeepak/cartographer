@@ -4,6 +4,10 @@
   "description": "MCP server providing AI agents with a queryable architecture graph",
   "type": "module",
   "main": "dist/index.js",
+  "imports": {
+    "#types": "./dist/types/index.js",
+    "#graph/*": "./dist/graph/*.js"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -18,6 +22,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "yaml": "^2.8.1",
     "zod": "^4.1.13"
   }
 }

@@ -4,6 +4,11 @@
     // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
+    "baseUrl": "./src",
+    "paths": {
+      "#types": ["./types/index.ts"],
+      "#graph/*": ["./graph/*.ts"]
+    },
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
