@@ -1,14 +1,39 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { Graph } from "#graph/graph";
 import { Resolver } from "#graph/resolver";
 import { startServer } from "../mcp/server.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
+const CONFIG_FILE = "config.yaml";
+
+interface Config {
+  sourceRoots: string[];
+}
+
+async function loadConfig(graphPath: string): Promise<Config> {
+  const configPath = join(graphPath, CONFIG_FILE);
+  const defaultConfig: Config = { sourceRoots: ["src"] };
+
+  if (!existsSync(configPath)) {
+    return defaultConfig;
+  }
+
+  try {
+    const content = await readFile(configPath, "utf-8");
+    const parsed = parseYaml(content) as Partial<Config>;
+    return {
+      sourceRoots: parsed.sourceRoots ?? defaultConfig.sourceRoots,
+    };
+  } catch {
+    return defaultConfig;
+  }
+}
 
 // ANSI colors (disabled if not TTY)
 const isTTY = process.stdout.isTTY;
@@ -98,12 +123,16 @@ async function scan() {
     process.exit(1);
   }
 
-  // Default source roots
-  const sourceRoots = [join(process.cwd(), "src")].filter(existsSync);
+  // Load config and resolve source roots
+  const config = await loadConfig(graphPath);
+  const sourceRoots = config.sourceRoots
+    .map((root) => join(process.cwd(), root))
+    .filter(existsSync);
+
   if (sourceRoots.length === 0) {
     console.log(c.red(`✗ No source directories found`));
-    console.log(c.dim(`\n  Create a src/ directory or configure sourceRoots in:`));
-    console.log(c.dim(`  ${GRAPH_DIR}/config.yaml`));
+    console.log(c.dim(`\n  Configured roots: ${config.sourceRoots.join(", ")}`));
+    console.log(c.dim(`  Update sourceRoots in: ${GRAPH_DIR}/${CONFIG_FILE}`));
     process.exit(1);
   }
 
@@ -159,8 +188,11 @@ async function serve() {
     process.exit(1);
   }
 
-  // Default source roots
-  const sourceRoots = [join(process.cwd(), "src")].filter(existsSync);
+  // Load config and resolve source roots
+  const config = await loadConfig(graphPath);
+  const sourceRoots = config.sourceRoots
+    .map((root) => join(process.cwd(), root))
+    .filter(existsSync);
 
   await startServer(graphPath, sourceRoots);
 }
