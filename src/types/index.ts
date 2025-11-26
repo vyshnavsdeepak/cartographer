@@ -33,11 +33,30 @@ export const CodeRefSchema = z.object({
   description: z.string().optional(),
 });
 
+// Relation types
+export const RelationTypeSchema = z.enum([
+  "belongs_to",
+  "has_one",
+  "has_many",
+  "many_to_many",
+]);
+
+// A relation to another entity
+export const RelationSchema = z.object({
+  name: z.string(),
+  entity: z.string(),
+  type: RelationTypeSchema,
+  foreign_key: z.string().optional(),
+  through: z.string().optional(), // For many_to_many
+  description: z.string().optional(),
+});
+
 // An entity definition
 export const EntitySchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   fields: z.array(FieldSchema),
+  relations: z.array(RelationSchema).optional(),
   code_refs: z
     .object({
       model: CodeRefSchema.optional(),
@@ -53,6 +72,8 @@ export const EntitySchema = z.object({
 export type FieldType = z.infer<typeof FieldTypeSchema>;
 export type Field = z.infer<typeof FieldSchema>;
 export type CodeRef = z.infer<typeof CodeRefSchema>;
+export type RelationType = z.infer<typeof RelationTypeSchema>;
+export type Relation = z.infer<typeof RelationSchema>;
 export type Entity = z.infer<typeof EntitySchema>;
 
 // Anchor types - for code references

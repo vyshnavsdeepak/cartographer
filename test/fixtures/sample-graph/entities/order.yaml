@@ -1,0 +1,26 @@
+name: Order
+description: Customer order
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+  - name: user_id
+    type: uuid
+    description: Owner of the order
+  - name: total
+    type: decimal
+  - name: status
+    type: enum
+    values:
+      - pending
+      - paid
+      - shipped
+      - delivered
+
+relations:
+  - name: user
+    entity: User
+    type: belongs_to
+    foreign_key: user_id
+    description: The user who placed this order

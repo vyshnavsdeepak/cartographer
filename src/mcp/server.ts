@@ -39,6 +39,7 @@ export function createServer(graphDir: string, sourceRoots: string[]) {
                 name: e.name,
                 description: e.description,
                 fieldCount: e.fields.length,
+                relationCount: e.relations?.length ?? 0,
               })),
               null,
               2
@@ -135,6 +136,62 @@ export function createServer(graphDir: string, sourceRoots: string[]) {
     }
   );
 
+  // Tool: get_relations
+  server.tool(
+    "get_relations",
+    "Get all relations for an entity or all relations in the graph",
+    { entity: z.string().optional().describe("Entity name (optional, returns all if omitted)") },
+    async ({ entity }) => {
+      const { graph } = await ensureLoaded();
+
+      if (entity) {
+        const entityData = graph.getEntity(entity);
+        if (!entityData) {
+          return {
+            content: [{ type: "text" as const, text: `Entity '${entity}' not found` }],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  entity: entity,
+                  relations: entityData.relations ?? [],
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      // Return all relations across all entities
+      const allRelations = graph.getAllEntities().flatMap((e) =>
+        (e.relations ?? []).map((r) => ({
+          from: e.name,
+          to: r.entity,
+          name: r.name,
+          type: r.type,
+          foreign_key: r.foreign_key,
+          through: r.through,
+        }))
+      );
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(allRelations, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
   // Tool: check_sync_status
   server.tool(
     "check_sync_status",
@@ -167,6 +224,14 @@ export function createServer(graphDir: string, sourceRoots: string[]) {
       if (loadErrors.length > 0) {
         issues.push(
           `Failed to load entities: ${loadErrors.map((e) => e.file).join(", ")}`
+        );
+      }
+
+      // Check for relation errors
+      const relationErrors = graph.getRelationErrors();
+      if (relationErrors.length > 0) {
+        issues.push(
+          `Invalid relations: ${relationErrors.map((e) => `${e.entity}.${e.relation} → ${e.referencedEntity}`).join(", ")}`
         );
       }
 

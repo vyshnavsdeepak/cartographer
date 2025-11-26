@@ -115,6 +115,15 @@ async function scan() {
     }
   }
 
+  const relationErrors = graph.getRelationErrors();
+  if (relationErrors.length > 0) {
+    console.log(c.red(`\n✗ Invalid relations (referencing non-existent entities):`));
+    for (const err of relationErrors) {
+      console.log(c.red(`  ${err.entity}.${err.relation} → ${err.referencedEntity}`));
+      console.log(c.dim(`    Create ${GRAPH_DIR}/entities/${err.referencedEntity.toLowerCase()}.yaml or fix the relation`));
+    }
+  }
+
   const entities = graph.getAllEntities();
   if (entities.length === 0) {
     console.log(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
@@ -171,7 +180,8 @@ async function scan() {
     }
   }
 
-  if (totalMissing === 0 && status.orphanedAnchors.length === 0 && loadErrors.length === 0) {
+  const hasErrors = totalMissing > 0 || status.orphanedAnchors.length > 0 || loadErrors.length > 0 || relationErrors.length > 0;
+  if (!hasErrors) {
     console.log(c.green(`\n✓ All anchors in sync`));
   } else {
     process.exit(1);

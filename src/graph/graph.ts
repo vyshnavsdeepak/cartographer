@@ -9,6 +9,14 @@ export interface LoadError {
   error: Error;
 }
 
+/** Error for invalid relation references */
+export interface RelationError {
+  entity: string;
+  relation: string;
+  referencedEntity: string;
+  message: string;
+}
+
 /**
  * Graph holds all entity definitions from a graph directory
  */
@@ -16,6 +24,7 @@ export class Graph {
   private entities: Map<string, Entity> = new Map();
   private graphDir: string;
   private loadErrors: LoadError[] = [];
+  private relationErrors: RelationError[] = [];
 
   constructor(graphDir: string) {
     this.graphDir = graphDir;
@@ -29,6 +38,7 @@ export class Graph {
     const entitiesDir = join(this.graphDir, "entities");
     const files = await readdir(entitiesDir);
     this.loadErrors = [];
+    this.relationErrors = [];
 
     for (const file of files) {
       if (file.endsWith(".yaml") || file.endsWith(".yml")) {
@@ -44,6 +54,29 @@ export class Graph {
         }
       }
     }
+
+    // Validate relations after all entities are loaded
+    this.validateRelations();
+  }
+
+  /**
+   * Validate that all relation references point to existing entities
+   */
+  private validateRelations(): void {
+    for (const entity of this.entities.values()) {
+      if (!entity.relations) continue;
+
+      for (const relation of entity.relations) {
+        if (!this.entities.has(relation.entity)) {
+          this.relationErrors.push({
+            entity: entity.name,
+            relation: relation.name,
+            referencedEntity: relation.entity,
+            message: `Entity "${entity.name}" has relation "${relation.name}" referencing non-existent entity "${relation.entity}"`,
+          });
+        }
+      }
+    }
   }
 
   /**
@@ -51,6 +84,13 @@ export class Graph {
    */
   getLoadErrors(): LoadError[] {
     return this.loadErrors;
+  }
+
+  /**
+   * Get relation validation errors
+   */
+  getRelationErrors(): RelationError[] {
+    return this.relationErrors;
   }
 
   /**

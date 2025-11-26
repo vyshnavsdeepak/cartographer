@@ -240,6 +240,173 @@ fields:
   });
 });
 
+describe("relations", () => {
+  it("parses entity with belongs_to relation", () => {
+    const yaml = `
+name: Order
+fields:
+  - name: id
+    type: uuid
+  - name: user_id
+    type: uuid
+relations:
+  - name: user
+    entity: User
+    type: belongs_to
+    foreign_key: user_id
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations).toHaveLength(1);
+    expect(entity.relations?.[0]).toEqual({
+      name: "user",
+      entity: "User",
+      type: "belongs_to",
+      foreign_key: "user_id",
+    });
+  });
+
+  it("parses entity with has_many relation", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: orders
+    entity: Order
+    type: has_many
+    description: Orders placed by this user
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations?.[0]?.type).toBe("has_many");
+    expect(entity.relations?.[0]?.description).toBe("Orders placed by this user");
+  });
+
+  it("parses entity with has_one relation", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: profile
+    entity: Profile
+    type: has_one
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations?.[0]?.type).toBe("has_one");
+  });
+
+  it("parses many_to_many with through table", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: roles
+    entity: Role
+    type: many_to_many
+    through: user_roles
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations?.[0]?.type).toBe("many_to_many");
+    expect(entity.relations?.[0]?.through).toBe("user_roles");
+  });
+
+  it("parses entity with multiple relations", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: orders
+    entity: Order
+    type: has_many
+  - name: profile
+    entity: Profile
+    type: has_one
+  - name: roles
+    entity: Role
+    type: many_to_many
+    through: user_roles
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations).toHaveLength(3);
+  });
+
+  it("allows entity without relations", () => {
+    const yaml = `
+name: Simple
+fields:
+  - name: id
+    type: uuid
+`;
+    const entity = parseEntity(yaml);
+
+    expect(entity.relations).toBeUndefined();
+  });
+
+  it("rejects invalid relation type", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: orders
+    entity: Order
+    type: invalid_relation
+`;
+    expect(() => parseEntity(yaml)).toThrow();
+  });
+
+  it("rejects relation without name", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - entity: Order
+    type: has_many
+`;
+    expect(() => parseEntity(yaml)).toThrow();
+  });
+
+  it("rejects relation without entity", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: orders
+    type: has_many
+`;
+    expect(() => parseEntity(yaml)).toThrow();
+  });
+
+  it("rejects relation without type", () => {
+    const yaml = `
+name: User
+fields:
+  - name: id
+    type: uuid
+relations:
+  - name: orders
+    entity: Order
+`;
+    expect(() => parseEntity(yaml)).toThrow();
+  });
+});
+
 describe("loadEntity", () => {
   it("loads entity from file", async () => {
     const entity = await loadEntity(
@@ -248,6 +415,17 @@ describe("loadEntity", () => {
 
     expect(entity.name).toBe("User");
     expect(entity.fields).toHaveLength(4);
+  });
+
+  it("loads entity with relations from file", async () => {
+    const entity = await loadEntity(
+      "./test/fixtures/sample-graph/entities/order.yaml"
+    );
+
+    expect(entity.name).toBe("Order");
+    expect(entity.relations).toHaveLength(1);
+    expect(entity.relations?.[0]?.type).toBe("belongs_to");
+    expect(entity.relations?.[0]?.entity).toBe("User");
   });
 
   it("throws ENOENT for non-existent file", async () => {

@@ -112,4 +112,40 @@ describe("Graph", () => {
       expect(graph.hasEntity("User")).toBe(true);
     });
   });
+
+  describe("getRelationErrors", () => {
+    it("returns empty array before load", () => {
+      expect(graph.getRelationErrors()).toEqual([]);
+    });
+
+    it("detects relations referencing non-existent entities", async () => {
+      await graph.load();
+      const errors = graph.getRelationErrors();
+      // broken-relation.yaml references DoesNotExist
+      const brokenError = errors.find(
+        (e) => e.entity === "BrokenRelation"
+      );
+      expect(brokenError).toBeDefined();
+      expect(brokenError?.referencedEntity).toBe("DoesNotExist");
+    });
+
+    it("includes helpful error message", async () => {
+      await graph.load();
+      const errors = graph.getRelationErrors();
+      const brokenError = errors.find(
+        (e) => e.entity === "BrokenRelation"
+      );
+      expect(brokenError?.message).toContain("BrokenRelation");
+      expect(brokenError?.message).toContain("DoesNotExist");
+      expect(brokenError?.message).toContain("nonexistent");
+    });
+
+    it("allows valid relations", async () => {
+      await graph.load();
+      const errors = graph.getRelationErrors();
+      // Order -> User is valid (User exists)
+      const orderError = errors.find((e) => e.entity === "Order");
+      expect(orderError).toBeUndefined();
+    });
+  });
 });

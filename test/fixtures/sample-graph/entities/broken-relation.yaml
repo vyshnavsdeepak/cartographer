@@ -1,0 +1,13 @@
+name: BrokenRelation
+description: Entity with invalid relation reference
+
+fields:
+  - name: id
+    type: uuid
+    primary: true
+
+relations:
+  - name: nonexistent
+    entity: DoesNotExist
+    type: belongs_to
+    description: This relation references an entity that doesn't exist
