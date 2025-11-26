@@ -2,7 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, relative } from "node:path";
 import { Graph } from "#graph/graph";
 import { Resolver } from "#graph/resolver";
 import { startServer } from "../mcp/server.js";
@@ -10,26 +10,34 @@ import { startServer } from "../mcp/server.js";
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
 
+// ANSI colors (disabled if not TTY)
+const isTTY = process.stdout.isTTY;
+const c = {
+  green: (s: string) => (isTTY ? `\x1b[32m${s}\x1b[0m` : s),
+  red: (s: string) => (isTTY ? `\x1b[31m${s}\x1b[0m` : s),
+  yellow: (s: string) => (isTTY ? `\x1b[33m${s}\x1b[0m` : s),
+  cyan: (s: string) => (isTTY ? `\x1b[36m${s}\x1b[0m` : s),
+  dim: (s: string) => (isTTY ? `\x1b[2m${s}\x1b[0m` : s),
+  bold: (s: string) => (isTTY ? `\x1b[1m${s}\x1b[0m` : s),
+};
+
 async function init() {
   const graphPath = join(process.cwd(), GRAPH_DIR);
 
   if (existsSync(graphPath)) {
-    console.log(`✗ ${GRAPH_DIR}/ already exists`);
+    console.log(c.red(`✗ ${GRAPH_DIR}/ already exists`));
+    console.log(c.dim(`\n  To start fresh, remove it first:`));
+    console.log(c.dim(`  rm -rf ${GRAPH_DIR}/`));
     process.exit(1);
   }
 
   await mkdir(join(graphPath, ENTITIES_DIR), { recursive: true });
 
-  // Create config
-  const config = {
-    sourceRoots: ["src"],
-  };
   await writeFile(
     join(graphPath, "config.yaml"),
     `# Cartographer configuration\nsourceRoots:\n  - src\n`
   );
 
-  // Create sample entity
   const sampleEntity = `name: Example
 description: Sample entity - replace with your own
 
@@ -50,20 +58,22 @@ fields:
 `;
   await writeFile(join(graphPath, ENTITIES_DIR, "example.yaml"), sampleEntity);
 
-  console.log(`✓ Created ${GRAPH_DIR}/`);
+  console.log(c.green(`✓ Created ${GRAPH_DIR}/`));
   console.log(`  └─ entities/example.yaml`);
   console.log(`  └─ config.yaml`);
-  console.log(`\nNext steps:`);
-  console.log(`  1. Edit ${GRAPH_DIR}/entities/ to define your entities`);
-  console.log(`  2. Add // @graph:Entity.category comments to your code`);
-  console.log(`  3. Run: cartographer scan`);
+  console.log(c.bold(`\nNext steps:`));
+  console.log(`  1. Edit ${c.cyan(`${GRAPH_DIR}/entities/`)} to define your entities`);
+  console.log(`  2. Add ${c.cyan(`// @graph:Entity.category`)} comments to your code`);
+  console.log(`  3. Run: ${c.cyan(`cartographer scan`)}`);
 }
 
 async function scan() {
   const graphPath = join(process.cwd(), GRAPH_DIR);
 
   if (!existsSync(graphPath)) {
-    console.log(`✗ No ${GRAPH_DIR}/ found. Run: cartographer init`);
+    console.log(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.log(c.dim(`\n  Initialize Cartographer first:`));
+    console.log(c.dim(`  cartographer init`));
     process.exit(1);
   }
 
@@ -72,22 +82,28 @@ async function scan() {
 
   const loadErrors = graph.getLoadErrors();
   if (loadErrors.length > 0) {
-    console.log(`✗ Failed to load some entities:`);
+    console.log(c.red(`\n✗ Failed to load some entities:`));
     for (const err of loadErrors) {
-      console.log(`  ${err.file}: ${err.error.message}`);
+      const relPath = relative(process.cwd(), err.file);
+      console.log(c.red(`  ${relPath}`));
+      console.log(c.dim(`    ${err.error.message.split("\n")[0]}`));
     }
   }
 
   const entities = graph.getAllEntities();
   if (entities.length === 0) {
-    console.log(`✗ No entities found in ${GRAPH_DIR}/entities/`);
+    console.log(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    console.log(c.dim(`\n  Create an entity definition:`));
+    console.log(c.dim(`  ${GRAPH_DIR}/entities/user.yaml`));
     process.exit(1);
   }
 
   // Default source roots
   const sourceRoots = [join(process.cwd(), "src")].filter(existsSync);
   if (sourceRoots.length === 0) {
-    console.log(`✗ No source directories found (tried: src/)`);
+    console.log(c.red(`✗ No source directories found`));
+    console.log(c.dim(`\n  Create a src/ directory or configure sourceRoots in:`));
+    console.log(c.dim(`  ${GRAPH_DIR}/config.yaml`));
     process.exit(1);
   }
 
@@ -98,29 +114,36 @@ async function scan() {
   const totalAnchors = status.resolved.reduce((sum, r) => sum + r.anchors.size, 0);
   const totalMissing = status.resolved.reduce((sum, r) => sum + r.missing.length, 0);
 
-  console.log(`\nEntities: ${entities.length}`);
-  console.log(`Anchors found: ${totalAnchors}`);
+  console.log(`\n${c.bold("Scan Results")}`);
+  console.log(`  Entities: ${c.cyan(String(entities.length))}`);
+  console.log(`  Anchors:  ${c.cyan(String(totalAnchors))}`);
 
   if (totalMissing > 0) {
-    console.log(`\n✗ Missing anchors:`);
+    console.log(c.red(`\n✗ Missing anchors (defined in graph, not found in code):`));
     for (const resolved of status.resolved) {
       if (resolved.missing.length > 0) {
         for (const anchor of resolved.missing) {
-          console.log(`  ${anchor}`);
+          console.log(c.red(`  ${anchor}`));
+          // Suggest how to fix
+          const [entity, category] = anchor.replace("@graph:", "").split(".");
+          console.log(c.dim(`    Add this comment to your code where ${entity} ${category} is defined:`));
+          console.log(c.dim(`    // ${anchor}`));
         }
       }
     }
   }
 
   if (status.orphanedAnchors.length > 0) {
-    console.log(`\n? Orphaned anchors (in code but not in graph):`);
+    console.log(c.yellow(`\n? Orphaned anchors (in code but not referenced in graph):`));
     for (const anchor of status.orphanedAnchors) {
-      console.log(`  ${anchor.anchor} (${anchor.file}:${anchor.line})`);
+      const relPath = relative(process.cwd(), anchor.file);
+      console.log(c.yellow(`  ${anchor.anchor}`));
+      console.log(c.dim(`    ${relPath}:${anchor.line}`));
     }
   }
 
   if (totalMissing === 0 && status.orphanedAnchors.length === 0 && loadErrors.length === 0) {
-    console.log(`\n✓ All anchors in sync`);
+    console.log(c.green(`\n✓ All anchors in sync`));
   } else {
     process.exit(1);
   }
@@ -130,7 +153,9 @@ async function serve() {
   const graphPath = join(process.cwd(), GRAPH_DIR);
 
   if (!existsSync(graphPath)) {
-    console.error(`✗ No ${GRAPH_DIR}/ found. Run: cartographer init`);
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
     process.exit(1);
   }
 
@@ -141,19 +166,19 @@ async function serve() {
 }
 
 function help() {
-  console.log(`Cartographer - Architecture graph for AI agents
+  console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
-Usage: cartographer <command>
+${c.bold("Usage:")} cartographer <command>
 
-Commands:
-  init    Initialize .graph/ in current directory
-  scan    Verify anchors match graph definitions
-  serve   Start MCP server for AI assistants
+${c.bold("Commands:")}
+  ${c.cyan("init")}    Initialize .graph/ in current directory
+  ${c.cyan("scan")}    Verify anchors match graph definitions
+  ${c.cyan("serve")}   Start MCP server for AI assistants
 
-Examples:
-  cartographer init
-  cartographer scan
-  cartographer serve
+${c.bold("Examples:")}
+  ${c.dim("$")} cartographer init
+  ${c.dim("$")} cartographer scan
+  ${c.dim("$")} cartographer serve
 `);
 }
 
@@ -176,7 +201,7 @@ switch (command) {
     help();
     break;
   default:
-    console.log(`Unknown command: ${command}`);
-    help();
+    console.log(c.red(`Unknown command: ${command}`));
+    console.log(c.dim(`\nRun ${c.cyan("cartographer --help")} for usage\n`));
     process.exit(1);
 }
