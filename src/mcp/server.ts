@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod/v4";
 import { Graph } from "#graph/graph";
 import { Resolver } from "#graph/resolver";
+import { ImpactAnalyzer, ChangeSpecSchema } from "#graph/impact";
 
 export function createServer(graphDir: string, sourceRoots: string[]) {
   const server = new McpServer({
@@ -189,6 +190,42 @@ export function createServer(graphDir: string, sourceRoots: string[]) {
           },
         ],
       };
+    }
+  );
+
+  // Tool: analyze_impact
+  server.tool(
+    "analyze_impact",
+    "Analyze the impact of a proposed change to an entity. Returns affected code locations, related entities, and suggested migration steps.",
+    {
+      entity: z.string().describe("Entity name to analyze"),
+      change: ChangeSpecSchema.describe("The proposed change specification"),
+    },
+    async ({ entity, change }) => {
+      const { graph, resolver } = await ensureLoaded();
+      const analyzer = new ImpactAnalyzer(graph, resolver);
+
+      try {
+        const result = await analyzer.analyze(entity, change);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: err instanceof Error ? err.message : String(err),
+            },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 
