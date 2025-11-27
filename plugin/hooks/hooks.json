@@ -1,0 +1,17 @@
+{
+  "description": "Cartographer auto-verification hooks for spec-code synchronization",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/../dist/cli/index.js scan --quiet",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
