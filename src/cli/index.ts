@@ -24,6 +24,10 @@ import {
   formatConstraintResults,
   type ConstraintResult,
 } from "../constraints/index.js";
+import {
+  MigrationManager,
+  type SqlDialect,
+} from "../migrate/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -648,6 +652,168 @@ async function infer(generate = false, minConfidence = 0.6) {
   }
 }
 
+async function migrateGenerate(name?: string, dialect: SqlDialect = "postgresql") {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
+    process.exit(1);
+  }
+
+  const graph = new Graph(graphPath);
+  await graph.load();
+
+  const entities = graph.getAllEntities();
+  if (entities.length === 0) {
+    console.error(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    process.exit(1);
+  }
+
+  const manager = new MigrationManager(graphPath, dialect);
+  const migration = await manager.generateMigration(entities, name);
+
+  if (!migration) {
+    console.log(c.green(`✓ No changes detected since last migration`));
+    return;
+  }
+
+  console.log(c.bold(`\nMigration: ${migration.name}\n`));
+
+  // Show summary
+  if (migration.diff.summary.length > 0) {
+    console.log(c.bold("Changes:"));
+    for (const line of migration.diff.summary) {
+      if (line.startsWith("+")) {
+        console.log(c.green(`  ${line}`));
+      } else if (line.startsWith("-")) {
+        console.log(c.red(`  ${line}`));
+      } else if (line.startsWith("~")) {
+        console.log(c.yellow(`  ${line}`));
+      } else if (line.startsWith("!")) {
+        console.log(c.red(`  ${line}`));
+      } else {
+        console.log(`  ${line}`);
+      }
+    }
+    console.log();
+  }
+
+  // Show warnings
+  if (migration.output.warnings.length > 0) {
+    console.log(c.yellow("Warnings:"));
+    for (const warning of migration.output.warnings) {
+      console.log(c.yellow(`  ${warning}`));
+    }
+    console.log();
+  }
+
+  // Show SQL preview
+  console.log(c.bold("SQL (Up):"));
+  if (migration.output.up.length > 0) {
+    for (const stmt of migration.output.up) {
+      console.log(c.dim(`  ${stmt}`));
+    }
+  } else {
+    console.log(c.dim("  -- No statements"));
+  }
+  console.log();
+
+  console.log(c.bold("SQL (Down):"));
+  if (migration.output.down.length > 0) {
+    for (const stmt of migration.output.down) {
+      console.log(c.dim(`  ${stmt}`));
+    }
+  } else {
+    console.log(c.dim("  -- No statements"));
+  }
+  console.log();
+
+  // Save migration
+  const filepath = await manager.saveMigration(migration, entities);
+  const relPath = relative(process.cwd(), filepath);
+
+  console.log(c.green(`✓ Migration saved to: ${relPath}`));
+
+  if (migration.output.hasDestructiveChanges) {
+    console.log(c.red(`\n⚠️  This migration contains DESTRUCTIVE changes!`));
+    console.log(c.dim(`  Review carefully before running.`));
+  }
+}
+
+async function migrateStatus() {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
+    process.exit(1);
+  }
+
+  const manager = new MigrationManager(graphPath);
+  const status = await manager.getStatus();
+
+  console.log(c.bold("\nMigration Status\n"));
+
+  if (!status.hasSnapshot) {
+    console.log(c.yellow(`? No baseline set`));
+    console.log(c.dim(`  Run ${c.cyan("cartographer migrate baseline")} to initialize`));
+    return;
+  }
+
+  console.log(`  Baseline entities: ${c.cyan(String(status.lastSnapshotEntities))}`);
+  console.log(`  Migrations applied: ${c.cyan(String(status.appliedCount))}`);
+
+  if (status.pendingCount > 0) {
+    console.log(`  Pending: ${c.yellow(String(status.pendingCount))}`);
+  }
+
+  if (status.lastApplied) {
+    console.log(`  Last applied: ${c.dim(status.lastApplied.name)} (${status.lastApplied.appliedAt})`);
+  }
+
+  // Check for pending changes
+  const graph = new Graph(graphPath);
+  await graph.load();
+  const entities = graph.getAllEntities();
+
+  const migration = await manager.generateMigration(entities);
+  if (migration) {
+    console.log(c.yellow(`\n? Pending changes detected`));
+    console.log(c.dim(`  Run ${c.cyan("cartographer migrate generate")} to create a migration`));
+  } else {
+    console.log(c.green(`\n✓ Schema is up to date`));
+  }
+}
+
+async function migrateBaseline() {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
+    process.exit(1);
+  }
+
+  const graph = new Graph(graphPath);
+  await graph.load();
+
+  const entities = graph.getAllEntities();
+  if (entities.length === 0) {
+    console.error(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    process.exit(1);
+  }
+
+  const manager = new MigrationManager(graphPath);
+  await manager.baseline(entities);
+
+  console.log(c.green(`✓ Baseline set with ${entities.length} entities`));
+  console.log(c.dim(`  Future migrations will be generated against this baseline`));
+}
+
 function help() {
   console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
@@ -659,13 +825,21 @@ ${c.bold("Commands:")}
   ${c.cyan("check")} [--quiet]   Check architectural constraints
   ${c.cyan("annotate")}          Auto-suggest and add anchor comments to code
   ${c.cyan("infer")}             Infer entities from existing code
+  ${c.cyan("migrate")} <sub>     Generate SQL migrations from spec changes
   ${c.cyan("serve")}             Start MCP server for AI assistants
+
+${c.bold("Migrate Subcommands:")}
+  ${c.cyan("migrate baseline")}  Set current entities as baseline for migrations
+  ${c.cyan("migrate generate")}  Generate migration from spec changes
+  ${c.cyan("migrate status")}    Show migration status
 
 ${c.bold("Options:")}
   ${c.cyan("--quiet, -q")}       Minimal output (errors only), useful for CI/hooks
   ${c.cyan("--dry-run")}         Preview changes without modifying files (annotate)
   ${c.cyan("--generate")}        Generate YAML files from inferred entities (infer)
   ${c.cyan("--min-confidence")}  Minimum confidence threshold 0-1 (default: 0.7/0.6)
+  ${c.cyan("--name")}            Migration name (migrate generate)
+  ${c.cyan("--dialect")}         SQL dialect: postgresql, mysql, sqlite (default: postgresql)
 
 ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
@@ -677,6 +851,10 @@ ${c.bold("Examples:")}
   ${c.dim("$")} cartographer annotate
   ${c.dim("$")} cartographer infer
   ${c.dim("$")} cartographer infer --generate
+  ${c.dim("$")} cartographer migrate baseline
+  ${c.dim("$")} cartographer migrate generate --name add_users
+  ${c.dim("$")} cartographer migrate generate --dialect mysql
+  ${c.dim("$")} cartographer migrate status
   ${c.dim("$")} cartographer serve
 `);
 }
@@ -703,6 +881,25 @@ for (const arg of args) {
   }
 }
 
+// Parse --name=X flag for migrate
+let migrationName: string | undefined;
+for (const arg of args) {
+  if (arg.startsWith("--name=")) {
+    migrationName = arg.split("=")[1];
+  }
+}
+
+// Parse --dialect=X flag for migrate
+let dialect: SqlDialect = "postgresql";
+for (const arg of args) {
+  if (arg.startsWith("--dialect=")) {
+    const value = arg.split("=")[1];
+    if (value === "postgresql" || value === "mysql" || value === "sqlite") {
+      dialect = value;
+    }
+  }
+}
+
 switch (command) {
   case "init":
     init();
@@ -722,6 +919,25 @@ switch (command) {
   case "infer":
     infer(generate, minConfidence);
     break;
+  case "migrate": {
+    const subCommand = args[1];
+    switch (subCommand) {
+      case "baseline":
+        migrateBaseline();
+        break;
+      case "generate":
+        migrateGenerate(migrationName, dialect);
+        break;
+      case "status":
+        migrateStatus();
+        break;
+      default:
+        console.log(c.red(`Unknown migrate subcommand: ${subCommand || "(none)"}`));
+        console.log(c.dim(`\nAvailable: baseline, generate, status`));
+        process.exit(1);
+    }
+    break;
+  }
   case "--help":
   case "-h":
   case undefined:
