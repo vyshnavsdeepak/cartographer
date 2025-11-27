@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { Graph } from "#graph/graph";
 import { Resolver } from "#graph/resolver";
 import { startServer } from "../mcp/server.js";
+import {
+  findAllCandidates,
+  insertAnchors,
+  previewInsertions,
+  type AnchorCandidate,
+} from "../annotate/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -14,6 +20,37 @@ const CONFIG_FILE = "config.yaml";
 
 interface Config {
   sourceRoots: string[];
+}
+
+/**
+ * Recursively find all files matching extensions in a directory
+ */
+async function findFiles(
+  dir: string,
+  extensions: string[] = [".ts", ".tsx"]
+): Promise<string[]> {
+  const files: string[] = [];
+
+  async function walk(currentDir: string): Promise<void> {
+    const entries = await readdir(currentDir);
+
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry);
+
+      // Skip node_modules and hidden directories
+      if (entry === "node_modules" || entry.startsWith(".")) continue;
+
+      const stats = await stat(fullPath);
+      if (stats.isDirectory()) {
+        await walk(fullPath);
+      } else if (extensions.some((ext) => entry.endsWith(ext))) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  await walk(dir);
+  return files;
 }
 
 async function loadConfig(graphPath: string): Promise<Config> {
@@ -226,6 +263,161 @@ async function serve() {
   await startServer(graphPath, sourceRoots);
 }
 
+async function annotate(dryRun = false, minConfidence = 0.7) {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
+    process.exit(1);
+  }
+
+  const graph = new Graph(graphPath);
+  await graph.load();
+
+  const entities = graph.getAllEntities();
+  if (entities.length === 0) {
+    console.error(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    process.exit(1);
+  }
+
+  // Load config and find source files
+  const config = await loadConfig(graphPath);
+  const sourceRoots = config.sourceRoots
+    .map((root) => join(process.cwd(), root))
+    .filter(existsSync);
+
+  if (sourceRoots.length === 0) {
+    console.error(c.red(`✗ No source directories found`));
+    process.exit(1);
+  }
+
+  // Find all TypeScript files
+  const allFiles: string[] = [];
+  for (const root of sourceRoots) {
+    const files = await findFiles(root);
+    allFiles.push(...files);
+  }
+
+  console.log(
+    c.dim(`Scanning ${allFiles.length} files in ${sourceRoots.length} source roots...\n`)
+  );
+
+  // First, resolve existing anchors to find what's missing
+  const resolver = new Resolver(graph, sourceRoots);
+  const status = await resolver.resolve();
+
+  // Collect missing anchors by entity
+  const missingByEntity = new Map<
+    string,
+    Array<{ category: string; anchor: string }>
+  >();
+
+  for (const resolved of status.resolved) {
+    if (resolved.missing.length > 0) {
+      const missing: Array<{ category: string; anchor: string }> = [];
+      for (const anchor of resolved.missing) {
+        const parts = anchor.replace("@graph:", "").split(".");
+        const category = parts[1];
+        if (parts.length >= 2 && category) {
+          missing.push({ category, anchor });
+        }
+      }
+      if (missing.length > 0) {
+        missingByEntity.set(resolved.entity.name, missing);
+      }
+    }
+  }
+
+  if (missingByEntity.size === 0) {
+    console.log(c.green(`✓ All anchors are already present in code`));
+    return;
+  }
+
+  // Find candidates for all missing anchors
+  const allCandidates: AnchorCandidate[] = [];
+  let totalMissing = 0;
+
+  for (const [entityName, missingAnchors] of missingByEntity) {
+    totalMissing += missingAnchors.length;
+    const entity = graph.getEntity(entityName);
+    if (!entity) continue;
+
+    const candidates = await findAllCandidates(allFiles, entity, missingAnchors);
+
+    for (const [anchor, anchorCandidates] of candidates) {
+      // Only take the best candidate if confidence >= threshold
+      const best = anchorCandidates.find((c) => c.confidence >= minConfidence);
+      if (best) {
+        allCandidates.push(best);
+      } else if (anchorCandidates.length > 0) {
+        // Report low-confidence matches
+        console.log(c.yellow(`? ${anchor} (needs manual review)`));
+        for (const candidate of anchorCandidates.slice(0, 3)) {
+          const relPath = relative(process.cwd(), candidate.file);
+          console.log(
+            c.dim(
+              `    ${relPath}:${candidate.line + 1} - ${candidate.matchType} (${Math.round(candidate.confidence * 100)}%)`
+            )
+          );
+        }
+      } else {
+        console.log(c.red(`✗ ${anchor} - no candidates found`));
+      }
+    }
+  }
+
+  if (allCandidates.length === 0) {
+    console.log(
+      c.yellow(`\n? Found ${totalMissing} missing anchors but no high-confidence candidates`)
+    );
+    console.log(c.dim(`  Try lowering --min-confidence or add anchors manually`));
+    process.exit(1);
+  }
+
+  // Preview or apply
+  if (dryRun) {
+    console.log(c.bold(`\nWould add ${allCandidates.length} anchors:\n`));
+    const previews = previewInsertions(allCandidates);
+    for (const [file, lines] of previews) {
+      const relPath = relative(process.cwd(), file);
+      console.log(c.cyan(relPath));
+      for (const line of lines) {
+        console.log(c.dim(`  ${line}`));
+      }
+    }
+    console.log(c.bold(`\nRun without --dry-run to apply changes`));
+  } else {
+    console.log(c.bold(`\nAdding ${allCandidates.length} anchors...\n`));
+    const results = await insertAnchors(allCandidates);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const result of results) {
+      const relPath = relative(process.cwd(), result.file);
+      if (result.success) {
+        console.log(c.green(`✓ ${result.anchor}`));
+        console.log(c.dim(`    ${relPath}:${result.line + 1}`));
+        successCount++;
+      } else {
+        console.log(c.red(`✗ ${result.anchor}`));
+        console.log(c.dim(`    ${result.error}`));
+        failCount++;
+      }
+    }
+
+    console.log(
+      `\n${c.green(`${successCount} added`)}${failCount > 0 ? `, ${c.red(`${failCount} failed`)}` : ""}`
+    );
+
+    if (successCount > 0) {
+      console.log(c.dim(`\nRun ${c.cyan("cartographer scan")} to verify`));
+    }
+  }
+}
+
 function help() {
   console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
@@ -234,15 +426,20 @@ ${c.bold("Usage:")} cartographer <command> [options]
 ${c.bold("Commands:")}
   ${c.cyan("init")}              Initialize .graph/ in current directory
   ${c.cyan("scan")} [--quiet]    Verify anchors match graph definitions
+  ${c.cyan("annotate")}          Auto-suggest and add anchor comments to code
   ${c.cyan("serve")}             Start MCP server for AI assistants
 
 ${c.bold("Options:")}
   ${c.cyan("--quiet, -q")}       Minimal output (errors only), useful for CI/hooks
+  ${c.cyan("--dry-run")}         Preview changes without modifying files (annotate)
+  ${c.cyan("--min-confidence")}  Minimum confidence threshold 0-1 (default: 0.7)
 
 ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
   ${c.dim("$")} cartographer scan
   ${c.dim("$")} cartographer scan --quiet
+  ${c.dim("$")} cartographer annotate --dry-run
+  ${c.dim("$")} cartographer annotate
   ${c.dim("$")} cartographer serve
 `);
 }
@@ -252,6 +449,21 @@ const args = process.argv.slice(2);
 const command = args[0];
 const flags = new Set(args.slice(1));
 const quiet = flags.has("--quiet") || flags.has("-q");
+const dryRun = flags.has("--dry-run");
+
+// Parse --min-confidence=X flag
+let minConfidence = 0.7;
+for (const arg of args) {
+  if (arg.startsWith("--min-confidence=")) {
+    const valueStr = arg.split("=")[1];
+    if (valueStr) {
+      const value = parseFloat(valueStr);
+      if (!isNaN(value) && value >= 0 && value <= 1) {
+        minConfidence = value;
+      }
+    }
+  }
+}
 
 switch (command) {
   case "init":
@@ -262,6 +474,9 @@ switch (command) {
     break;
   case "serve":
     serve();
+    break;
+  case "annotate":
+    annotate(dryRun, minConfidence);
     break;
   case "--help":
   case "-h":
