@@ -19,6 +19,11 @@ import {
   previewGeneration,
   formatEntitySummary,
 } from "../infer/index.js";
+import {
+  checkConstraints,
+  formatConstraintResults,
+  type ConstraintResult,
+} from "../constraints/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -424,6 +429,114 @@ async function annotate(dryRun = false, minConfidence = 0.7) {
   }
 }
 
+async function check(quiet = false) {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    if (!quiet) {
+      console.error(c.dim(`\n  Initialize Cartographer first:`));
+      console.error(c.dim(`  cartographer init`));
+    }
+    process.exit(1);
+  }
+
+  const graph = new Graph(graphPath);
+  await graph.load();
+
+  const entities = graph.getAllEntities();
+  if (entities.length === 0) {
+    console.error(c.red(`✗ No entities found in ${GRAPH_DIR}/entities/`));
+    process.exit(1);
+  }
+
+  // Load config and find source files
+  const config = await loadConfig(graphPath);
+  const sourceRoots = config.sourceRoots
+    .map((root) => join(process.cwd(), root))
+    .filter(existsSync);
+
+  if (sourceRoots.length === 0) {
+    console.error(c.red(`✗ No source directories found`));
+    process.exit(1);
+  }
+
+  // Find all TypeScript files
+  const allFiles: string[] = [];
+  for (const root of sourceRoots) {
+    const files = await findFiles(root);
+    allFiles.push(...files);
+  }
+
+  // Resolve anchors first
+  const resolver = new Resolver(graph, sourceRoots);
+  const status = await resolver.resolve();
+
+  // Build anchor map with full anchor strings (e.g., "@graph:User.model")
+  const allAnchors = new Map<string, import("../types/index.js").ResolvedAnchor>();
+  for (const resolved of status.resolved) {
+    for (const [category, info] of resolved.anchors) {
+      // Build the full anchor string from entity name and category
+      const fullAnchor = `@graph:${resolved.entity.name}.${category}`;
+      allAnchors.set(fullAnchor, info);
+    }
+  }
+
+  // Check constraints for all entities
+  const allResults: ConstraintResult[] = [];
+  let entitiesWithConstraints = 0;
+
+  for (const entity of entities) {
+    if (entity.constraints && entity.constraints.length > 0) {
+      entitiesWithConstraints++;
+      const results = await checkConstraints(
+        entity,
+        allAnchors,
+        allFiles,
+        process.cwd()
+      );
+      allResults.push(...results);
+    }
+  }
+
+  if (entitiesWithConstraints === 0) {
+    if (!quiet) {
+      console.log(c.yellow(`? No constraints defined in any entity`));
+      console.log(c.dim(`  Add constraints to entity files to enforce architectural rules`));
+    }
+    return;
+  }
+
+  const { passed, failed, summary } = formatConstraintResults(allResults);
+
+  if (!quiet) {
+    console.log(`\n${c.bold("Constraint Check Results")}`);
+    console.log(`  Rules checked: ${c.cyan(String(allResults.length))}`);
+    console.log(`  Passed: ${c.green(String(passed))}`);
+    if (failed > 0) {
+      console.log(`  Failed: ${c.red(String(failed))}`);
+    }
+  }
+
+  if (failed > 0) {
+    console.log(c.red(`\n✗ Constraint violations found:\n`));
+    for (const line of summary) {
+      if (line.startsWith("  [")) {
+        console.log(c.red(line));
+      } else if (line.startsWith("    ") && line.includes(":")) {
+        console.log(c.yellow(line));
+      } else {
+        console.log(c.dim(line));
+      }
+    }
+    process.exit(1);
+  } else {
+    if (!quiet) {
+      console.log(c.green(`\n✓ All constraints satisfied`));
+    }
+  }
+}
+
 async function infer(generate = false, minConfidence = 0.6) {
   const graphPath = join(process.cwd(), GRAPH_DIR);
   const entitiesPath = join(graphPath, ENTITIES_DIR);
@@ -543,6 +656,7 @@ ${c.bold("Usage:")} cartographer <command> [options]
 ${c.bold("Commands:")}
   ${c.cyan("init")}              Initialize .graph/ in current directory
   ${c.cyan("scan")} [--quiet]    Verify anchors match graph definitions
+  ${c.cyan("check")} [--quiet]   Check architectural constraints
   ${c.cyan("annotate")}          Auto-suggest and add anchor comments to code
   ${c.cyan("infer")}             Infer entities from existing code
   ${c.cyan("serve")}             Start MCP server for AI assistants
@@ -557,6 +671,8 @@ ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
   ${c.dim("$")} cartographer scan
   ${c.dim("$")} cartographer scan --quiet
+  ${c.dim("$")} cartographer check
+  ${c.dim("$")} cartographer check --quiet
   ${c.dim("$")} cartographer annotate --dry-run
   ${c.dim("$")} cartographer annotate
   ${c.dim("$")} cartographer infer
@@ -593,6 +709,9 @@ switch (command) {
     break;
   case "scan":
     scan(quiet);
+    break;
+  case "check":
+    check(quiet);
     break;
   case "serve":
     serve();

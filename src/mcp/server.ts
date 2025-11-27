@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { Graph } from "#graph/graph";
 import { Resolver } from "#graph/resolver";
 import { ImpactAnalyzer, ChangeSpecSchema } from "#graph/impact";
+import { checkConstraints, formatConstraintResults, type ConstraintResult } from "#constraints";
 
 export function createServer(graphDir: string, sourceRoots: string[]) {
   const server = new McpServer({
@@ -226,6 +227,83 @@ export function createServer(graphDir: string, sourceRoots: string[]) {
           isError: true,
         };
       }
+    }
+  );
+
+  // Tool: check_constraints
+  server.tool(
+    "check_constraints",
+    "Check architectural constraints defined in entities. Returns violations if any rules are broken.",
+    { entity: z.string().optional().describe("Entity name to check (optional, checks all if omitted)") },
+    async ({ entity }) => {
+      const { graph, resolver } = await ensureLoaded();
+      const status = await resolver.resolve();
+
+      // Build anchor map with full anchor strings (e.g., "@graph:User.model")
+      const allAnchors = new Map<string, import("#types").ResolvedAnchor>();
+      for (const resolved of status.resolved) {
+        for (const [category, info] of resolved.anchors) {
+          const fullAnchor = `@graph:${resolved.entity.name}.${category}`;
+          allAnchors.set(fullAnchor, info);
+        }
+      }
+
+      // Collect all source files
+      const allFiles: string[] = [];
+      for (const resolved of status.resolved) {
+        for (const [, info] of resolved.anchors) {
+          if (!allFiles.includes(info.file)) {
+            allFiles.push(info.file);
+          }
+        }
+      }
+
+      // Get entities to check
+      const entitiesToCheck = entity
+        ? [graph.getEntity(entity)].filter(Boolean)
+        : graph.getAllEntities();
+
+      if (entity && entitiesToCheck.length === 0) {
+        return {
+          content: [{ type: "text" as const, text: `Entity '${entity}' not found` }],
+          isError: true,
+        };
+      }
+
+      // Check constraints for all selected entities
+      const allResults: ConstraintResult[] = [];
+      for (const e of entitiesToCheck) {
+        if (e && e.constraints && e.constraints.length > 0) {
+          const results = await checkConstraints(
+            e,
+            allAnchors,
+            allFiles,
+            graphDir.replace("/.graph", "")
+          );
+          allResults.push(...results);
+        }
+      }
+
+      const { passed, failed, summary } = formatConstraintResults(allResults);
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                rulesChecked: allResults.length,
+                passed,
+                failed,
+                allPassed: failed === 0,
+                violations: failed > 0 ? summary : undefined,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
     }
   );
 

@@ -14,7 +14,8 @@
     "#types": "./dist/types/index.js",
     "#graph/*": "./dist/graph/*.js",
     "#anchors/*": "./dist/anchors/*.js",
-    "#mcp/*": "./dist/mcp/*.js"
+    "#mcp/*": "./dist/mcp/*.js",
+    "#constraints": "./dist/constraints/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",

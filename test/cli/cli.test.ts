@@ -271,4 +271,147 @@ fields:
       expect(result.stdout).toMatch(/Entities:\s*2/);
     });
   });
+
+  describe("check", () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+      testDir = join(tmpdir(), `cartographer-test-${randomUUID()}`);
+      await mkdir(testDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      await rm(testDir, { recursive: true, force: true });
+    });
+
+    it("fails if .graph does not exist", async () => {
+      const result = await runCli(["check"], testDir);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("No .graph/ found");
+    });
+
+    it("reports no constraints when none defined", async () => {
+      await mkdir(join(testDir, ".graph", "entities"), { recursive: true });
+      await mkdir(join(testDir, "src"), { recursive: true });
+
+      await writeFile(
+        join(testDir, ".graph", "config.yaml"),
+        "sourceRoots:\n  - src\n"
+      );
+
+      await writeFile(
+        join(testDir, ".graph", "entities", "user.yaml"),
+        `name: User
+fields:
+  - name: id
+    type: uuid
+`
+      );
+
+      await writeFile(join(testDir, "src", "user.ts"), "// Some code\n");
+
+      const result = await runCli(["check"], testDir);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("No constraints defined");
+    });
+
+    it("passes when constraints are satisfied", async () => {
+      await mkdir(join(testDir, ".graph", "entities"), { recursive: true });
+      await mkdir(join(testDir, "src"), { recursive: true });
+
+      await writeFile(
+        join(testDir, ".graph", "config.yaml"),
+        "sourceRoots:\n  - src\n"
+      );
+
+      // Entity with colocation constraint
+      await writeFile(
+        join(testDir, ".graph", "entities", "user.yaml"),
+        `name: User
+fields:
+  - name: id
+    type: uuid
+code_refs:
+  model:
+    anchor: "@graph:User.model"
+constraints:
+  - rule: test_coverage
+    description: All models must have tests
+    check:
+      - anchor: "@graph:User.model"
+        must_have_sibling: "*.test.ts"
+`
+      );
+
+      // Create model file with anchor
+      await writeFile(
+        join(testDir, "src", "user.ts"),
+        `// @graph:User.model
+export class User {
+  id: string;
+}
+`
+      );
+
+      // Create test file (sibling)
+      await writeFile(
+        join(testDir, "src", "user.test.ts"),
+        `describe('User', () => {
+  it('works', () => {});
+});
+`
+      );
+
+      const result = await runCli(["check"], testDir);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("All constraints satisfied");
+    });
+
+    it("fails when constraints are violated", async () => {
+      await mkdir(join(testDir, ".graph", "entities"), { recursive: true });
+      await mkdir(join(testDir, "src"), { recursive: true });
+
+      await writeFile(
+        join(testDir, ".graph", "config.yaml"),
+        "sourceRoots:\n  - src\n"
+      );
+
+      // Entity with colocation constraint
+      await writeFile(
+        join(testDir, ".graph", "entities", "user.yaml"),
+        `name: User
+fields:
+  - name: id
+    type: uuid
+code_refs:
+  model:
+    anchor: "@graph:User.model"
+constraints:
+  - rule: test_coverage
+    description: All models must have tests
+    check:
+      - anchor: "@graph:User.model"
+        must_have_sibling: "*.test.ts"
+`
+      );
+
+      // Create model file with anchor but NO test file
+      await writeFile(
+        join(testDir, "src", "user.ts"),
+        `// @graph:User.model
+export class User {
+  id: string;
+}
+`
+      );
+
+      const result = await runCli(["check"], testDir);
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain("violations");
+    });
+  });
 });

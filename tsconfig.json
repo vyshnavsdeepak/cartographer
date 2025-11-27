@@ -8,7 +8,8 @@
     "paths": {
       "#types": ["./types/index.ts"],
       "#graph/*": ["./graph/*.ts"],
-      "#anchors/*": ["./anchors/*.ts"]
+      "#anchors/*": ["./anchors/*.ts"],
+      "#constraints": ["./constraints/index.ts"]
     },
 
     // Environment Settings

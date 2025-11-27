@@ -33,6 +33,36 @@ export const CodeRefSchema = z.object({
   description: z.string().optional(),
 });
 
+// Constraint check types
+// Use .strict() to fail on unknown properties, enabling proper union discrimination
+export const ImportRuleCheckSchema = z.object({
+  anchor: z.string(),
+  not_imported_by: z.string().optional(), // Glob pattern for disallowed importers
+  allowed_importers: z.array(z.string()).optional(), // Glob patterns for allowed importers
+}).strict();
+
+export const FileRuleCheckSchema = z.object({
+  files: z.string(), // Glob pattern for files to check
+  cannot_import: z.array(z.string()).optional(), // Modules that cannot be imported
+  must_import: z.array(z.string()).optional(), // Modules that must be imported
+}).strict();
+
+export const ColocationRuleCheckSchema = z.object({
+  anchor: z.string(),
+  must_have_sibling: z.string(), // Pattern for required sibling file
+}).strict();
+
+// A constraint rule
+export const ConstraintSchema = z.object({
+  rule: z.string(),
+  description: z.string().optional(),
+  check: z.union([
+    z.array(ImportRuleCheckSchema),
+    z.array(FileRuleCheckSchema),
+    z.array(ColocationRuleCheckSchema),
+  ]),
+});
+
 // Relation types
 export const RelationTypeSchema = z.enum([
   "belongs_to",
@@ -67,6 +97,7 @@ export const EntitySchema = z.object({
       api: z.array(CodeRefSchema).optional(),
     })
     .optional(),
+  constraints: z.array(ConstraintSchema).optional(),
 });
 
 // Infer TypeScript types from schemas
@@ -75,6 +106,10 @@ export type Field = z.infer<typeof FieldSchema>;
 export type CodeRef = z.infer<typeof CodeRefSchema>;
 export type RelationType = z.infer<typeof RelationTypeSchema>;
 export type Relation = z.infer<typeof RelationSchema>;
+export type ImportRuleCheck = z.infer<typeof ImportRuleCheckSchema>;
+export type FileRuleCheck = z.infer<typeof FileRuleCheckSchema>;
+export type ColocationRuleCheck = z.infer<typeof ColocationRuleCheckSchema>;
+export type Constraint = z.infer<typeof ConstraintSchema>;
 export type Entity = z.infer<typeof EntitySchema>;
 // @end:Entity.types
 
