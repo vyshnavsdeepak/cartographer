@@ -13,6 +13,12 @@ import {
   previewInsertions,
   type AnchorCandidate,
 } from "../annotate/index.js";
+import {
+  scanForEntities,
+  generateEntityFiles,
+  previewGeneration,
+  formatEntitySummary,
+} from "../infer/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -418,6 +424,117 @@ async function annotate(dryRun = false, minConfidence = 0.7) {
   }
 }
 
+async function infer(generate = false, minConfidence = 0.6) {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+  const entitiesPath = join(graphPath, ENTITIES_DIR);
+
+  // Load config (use defaults if no .graph exists yet)
+  let sourceRoots: string[];
+  if (existsSync(graphPath)) {
+    const config = await loadConfig(graphPath);
+    sourceRoots = config.sourceRoots
+      .map((root) => join(process.cwd(), root))
+      .filter(existsSync);
+  } else {
+    // Default to src if no config
+    const defaultRoot = join(process.cwd(), "src");
+    sourceRoots = existsSync(defaultRoot) ? [defaultRoot] : [process.cwd()];
+  }
+
+  if (sourceRoots.length === 0) {
+    console.error(c.red(`✗ No source directories found`));
+    process.exit(1);
+  }
+
+  // Find all TypeScript files
+  const allFiles: string[] = [];
+  for (const root of sourceRoots) {
+    const files = await findFiles(root);
+    allFiles.push(...files);
+  }
+
+  console.log(
+    c.dim(`Scanning ${allFiles.length} files in ${sourceRoots.length} source roots...\n`)
+  );
+
+  // Scan for entities
+  const entities = await scanForEntities(allFiles);
+
+  // Filter by confidence
+  const filtered = entities.filter((e) => e.confidence >= minConfidence);
+
+  if (filtered.length === 0) {
+    console.log(c.yellow(`? No entities found with confidence >= ${Math.round(minConfidence * 100)}%`));
+    console.log(c.dim(`  Try lowering --min-confidence or check your source files`));
+    return;
+  }
+
+  console.log(c.bold(`Found ${filtered.length} entities:\n`));
+
+  for (const entity of filtered) {
+    console.log(formatEntitySummary(entity, process.cwd()));
+    console.log();
+  }
+
+  if (!generate) {
+    // Preview mode
+    console.log(c.bold(`\nYAML Preview:\n`));
+    const previews = previewGeneration(filtered, process.cwd());
+    for (const [name, yaml] of previews) {
+      console.log(c.cyan(`--- ${name.toLowerCase()}.yaml ---`));
+      console.log(c.dim(yaml));
+    }
+    console.log(c.bold(`\nRun with --generate to create entity files`));
+    return;
+  }
+
+  // Generate mode
+  if (!existsSync(graphPath)) {
+    console.log(c.dim(`Creating ${GRAPH_DIR}/ directory...`));
+    await mkdir(entitiesPath, { recursive: true });
+
+    // Create default config
+    await writeFile(
+      join(graphPath, "config.yaml"),
+      `# Cartographer configuration\nsourceRoots:\n  - src\n`
+    );
+  }
+
+  console.log(c.bold(`\nGenerating entity files...\n`));
+
+  const results = await generateEntityFiles(filtered, {
+    outputDir: entitiesPath,
+    baseDir: process.cwd(),
+  });
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const result of results) {
+    const relPath = relative(process.cwd(), result.filePath);
+    if (result.success) {
+      console.log(c.green(`✓ ${result.entityName}`));
+      console.log(c.dim(`    ${relPath}`));
+      successCount++;
+    } else {
+      console.log(c.red(`✗ ${result.entityName}`));
+      console.log(c.dim(`    ${result.error}`));
+      failCount++;
+    }
+  }
+
+  console.log(
+    `\n${c.green(`${successCount} generated`)}${failCount > 0 ? `, ${c.red(`${failCount} failed`)}` : ""}`
+  );
+
+  if (successCount > 0) {
+    console.log(c.dim(`\nNext steps:`));
+    console.log(c.dim(`  1. Review generated files in ${c.cyan(`${GRAPH_DIR}/entities/`)}`));
+    console.log(c.dim(`  2. Run ${c.cyan("cartographer annotate")} to add anchors to code`));
+    console.log(c.dim(`  3. Run ${c.cyan("cartographer scan")} to verify`));
+  }
+}
+
 function help() {
   console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
@@ -427,12 +544,14 @@ ${c.bold("Commands:")}
   ${c.cyan("init")}              Initialize .graph/ in current directory
   ${c.cyan("scan")} [--quiet]    Verify anchors match graph definitions
   ${c.cyan("annotate")}          Auto-suggest and add anchor comments to code
+  ${c.cyan("infer")}             Infer entities from existing code
   ${c.cyan("serve")}             Start MCP server for AI assistants
 
 ${c.bold("Options:")}
   ${c.cyan("--quiet, -q")}       Minimal output (errors only), useful for CI/hooks
   ${c.cyan("--dry-run")}         Preview changes without modifying files (annotate)
-  ${c.cyan("--min-confidence")}  Minimum confidence threshold 0-1 (default: 0.7)
+  ${c.cyan("--generate")}        Generate YAML files from inferred entities (infer)
+  ${c.cyan("--min-confidence")}  Minimum confidence threshold 0-1 (default: 0.7/0.6)
 
 ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
@@ -440,6 +559,8 @@ ${c.bold("Examples:")}
   ${c.dim("$")} cartographer scan --quiet
   ${c.dim("$")} cartographer annotate --dry-run
   ${c.dim("$")} cartographer annotate
+  ${c.dim("$")} cartographer infer
+  ${c.dim("$")} cartographer infer --generate
   ${c.dim("$")} cartographer serve
 `);
 }
@@ -450,9 +571,10 @@ const command = args[0];
 const flags = new Set(args.slice(1));
 const quiet = flags.has("--quiet") || flags.has("-q");
 const dryRun = flags.has("--dry-run");
+const generate = flags.has("--generate");
 
 // Parse --min-confidence=X flag
-let minConfidence = 0.7;
+let minConfidence = command === "infer" ? 0.6 : 0.7; // Default differs by command
 for (const arg of args) {
   if (arg.startsWith("--min-confidence=")) {
     const valueStr = arg.split("=")[1];
@@ -477,6 +599,9 @@ switch (command) {
     break;
   case "annotate":
     annotate(dryRun, minConfidence);
+    break;
+  case "infer":
+    infer(generate, minConfidence);
     break;
   case "--help":
   case "-h":
