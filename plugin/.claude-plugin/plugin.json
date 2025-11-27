@@ -1,0 +1,21 @@
+{
+  "name": "cartographer",
+  "version": "0.1.0",
+  "description": "Architecture-as-Code plugin for spec-driven development. Define entities, relations, and code references in YAML specs, then keep implementations synchronized.",
+  "author": {
+    "name": "Vyshnav S Deepak",
+    "url": "https://github.com/vyshnavsdeepak"
+  },
+  "repository": "https://github.com/vyshnavsdeepak/cartographer",
+  "homepage": "https://github.com/vyshnavsdeepak/cartographer#readme",
+  "license": "MIT",
+  "keywords": [
+    "architecture",
+    "spec-driven",
+    "entities",
+    "relations",
+    "code-generation",
+    "mcp",
+    "synchronization"
+  ]
+}
