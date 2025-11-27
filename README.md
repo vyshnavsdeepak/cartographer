@@ -178,6 +178,27 @@ sourceRoots:
   - lib
 ```
 
+## Claude Code Plugin
+
+For the best experience with Claude Code, install the Cartographer plugin:
+
+```bash
+# From the repository
+claude plugins install ./plugin
+```
+
+The plugin provides:
+
+| Feature | Description |
+|---------|-------------|
+| `/graph:check` | Verify spec-code synchronization |
+| `/graph:entity` | Query entity details and relations |
+| `/graph:impact` | Analyze change impact before modifications |
+| **Auto-activation** | Skill activates when working with entities |
+| **Auto-verification** | Hook runs scan after every file change |
+
+See [plugin/README.md](plugin/README.md) for full documentation.
+
 ## Roadmap
 
 See [GitHub Issues](https://github.com/vyshnavsdeepak/cartographer/issues) for detailed roadmap.
@@ -189,12 +210,14 @@ See [GitHub Issues](https://github.com/vyshnavsdeepak/cartographer/issues) for d
 - [x] Graph + Anchor resolver
 - [x] MCP server with tools
 - [x] CLI (init, scan, serve)
+- [x] Relations between entities
+- [x] Impact analysis (what changes if I modify X?)
+- [x] Claude Code plugin with commands, skills, hooks
 
 **Next:**
-- [ ] Relations between entities
-- [ ] Impact analysis (what changes if I modify X?)
 - [ ] Migration generation
 - [ ] Architecture diagrams from spec
+- [ ] Marketplace publishing
 
 ## Development
 
