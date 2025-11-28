@@ -29,6 +29,7 @@ import {
   type SqlDialect,
 } from "../migrate/index.js";
 import { writeSchema } from "../schema/index.js";
+import { writeVSCodeConfig } from "../vscode/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -846,6 +847,60 @@ async function schema(outputPath?: string) {
   console.log(c.dim(`  1. Install ${c.cyan("redhat.vscode-yaml")} extension`));
   console.log(c.dim(`  2. Add to .vscode/settings.json:`));
   console.log(c.dim(`     "yaml.schemas": { "${relPath}": "${GRAPH_DIR}/${ENTITIES_DIR}/*.yaml" }`));
+  console.log(c.dim(`\nOr run: ${c.cyan("cartographer vscode")} to auto-configure`));
+}
+
+async function vscode() {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+  const schemaPath = join(graphPath, "schema.json");
+  const entityGlob = `${GRAPH_DIR}/${ENTITIES_DIR}/*.yaml`;
+
+  // Check if .graph exists
+  if (!existsSync(graphPath)) {
+    console.error(c.red(`✗ No ${GRAPH_DIR}/ found`));
+    console.error(c.dim(`\n  Initialize Cartographer first:`));
+    console.error(c.dim(`  cartographer init`));
+    process.exit(1);
+  }
+
+  // Generate schema if it doesn't exist
+  if (!existsSync(schemaPath)) {
+    const graph = new Graph(graphPath);
+    await graph.load();
+    const entityNames = graph.getAllEntities().map((e) => e.name);
+    await writeSchema(schemaPath, entityNames);
+    console.log(c.green(`✓ Generated ${GRAPH_DIR}/schema.json`));
+  }
+
+  // Write VS Code configuration
+  const result = await writeVSCodeConfig({
+    projectRoot: process.cwd(),
+    schemaPath,
+    entityGlob,
+  });
+
+  const settingsRelPath = relative(process.cwd(), result.settingsPath);
+  const extensionsRelPath = relative(process.cwd(), result.extensionsPath);
+
+  if (result.settingsCreated) {
+    console.log(c.green(`✓ Created ${settingsRelPath}`));
+  } else {
+    console.log(c.green(`✓ Updated ${settingsRelPath}`));
+  }
+
+  if (result.extensionsCreated) {
+    console.log(c.green(`✓ Created ${extensionsRelPath}`));
+  } else {
+    console.log(c.green(`✓ Updated ${extensionsRelPath}`));
+  }
+
+  console.log(c.dim(`\nVS Code will now:`));
+  console.log(c.dim(`  • Validate entity YAML files against the schema`));
+  console.log(c.dim(`  • Provide autocompletion and hover documentation`));
+  console.log(c.dim(`  • Show errors for invalid field types and relations`));
+
+  console.log(c.dim(`\nInstall recommended extension if prompted, or run:`));
+  console.log(c.dim(`  code --install-extension redhat.vscode-yaml`));
 }
 
 function help() {
@@ -861,6 +916,7 @@ ${c.bold("Commands:")}
   ${c.cyan("infer")}             Infer entities from existing code
   ${c.cyan("migrate")} <sub>     Generate SQL migrations from spec changes
   ${c.cyan("schema")}            Generate JSON Schema for VS Code validation
+  ${c.cyan("vscode")}            Configure VS Code for YAML validation
   ${c.cyan("serve")}             Start MCP server for AI assistants
 
 ${c.bold("Migrate Subcommands:")}
@@ -893,6 +949,7 @@ ${c.bold("Examples:")}
   ${c.dim("$")} cartographer migrate status
   ${c.dim("$")} cartographer schema
   ${c.dim("$")} cartographer schema --output ./schema.json
+  ${c.dim("$")} cartographer vscode
   ${c.dim("$")} cartographer serve
 `);
 }
@@ -989,6 +1046,9 @@ switch (command) {
   }
   case "schema":
     schema(outputPath);
+    break;
+  case "vscode":
+    vscode();
     break;
   case "--help":
   case "-h":
