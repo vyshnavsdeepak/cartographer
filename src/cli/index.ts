@@ -28,6 +28,7 @@ import {
   MigrationManager,
   type SqlDialect,
 } from "../migrate/index.js";
+import { writeSchema } from "../schema/index.js";
 
 const GRAPH_DIR = ".graph";
 const ENTITIES_DIR = "entities";
@@ -814,6 +815,34 @@ async function migrateBaseline() {
   console.log(c.dim(`  Future migrations will be generated against this baseline`));
 }
 
+async function schema(outputPath?: string) {
+  const graphPath = join(process.cwd(), GRAPH_DIR);
+  const defaultOutput = join(graphPath, "schema.json");
+  const targetPath = outputPath ? resolve(outputPath) : defaultOutput;
+
+  // Load entity names if graph exists (for relation validation)
+  let entityNames: string[] = [];
+  if (existsSync(graphPath)) {
+    const graph = new Graph(graphPath);
+    await graph.load();
+    entityNames = graph.getAllEntities().map((e) => e.name);
+  }
+
+  await writeSchema(targetPath, entityNames);
+
+  const relPath = relative(process.cwd(), targetPath);
+  console.log(c.green(`✓ Generated JSON Schema: ${relPath}`));
+
+  if (entityNames.length > 0) {
+    console.log(c.dim(`  Includes ${entityNames.length} entity names for relation validation`));
+  }
+
+  console.log(c.dim(`\nConfigure VS Code to use this schema:`));
+  console.log(c.dim(`  1. Install ${c.cyan("redhat.vscode-yaml")} extension`));
+  console.log(c.dim(`  2. Add to .vscode/settings.json:`));
+  console.log(c.dim(`     "yaml.schemas": { "${relPath}": "${GRAPH_DIR}/${ENTITIES_DIR}/*.yaml" }`));
+}
+
 function help() {
   console.log(`${c.bold("Cartographer")} - Architecture graph for AI agents
 
@@ -826,6 +855,7 @@ ${c.bold("Commands:")}
   ${c.cyan("annotate")}          Auto-suggest and add anchor comments to code
   ${c.cyan("infer")}             Infer entities from existing code
   ${c.cyan("migrate")} <sub>     Generate SQL migrations from spec changes
+  ${c.cyan("schema")}            Generate JSON Schema for VS Code validation
   ${c.cyan("serve")}             Start MCP server for AI assistants
 
 ${c.bold("Migrate Subcommands:")}
@@ -840,6 +870,7 @@ ${c.bold("Options:")}
   ${c.cyan("--min-confidence")}  Minimum confidence threshold 0-1 (default: 0.7/0.6)
   ${c.cyan("--name")}            Migration name (migrate generate)
   ${c.cyan("--dialect")}         SQL dialect: postgresql, mysql, sqlite (default: postgresql)
+  ${c.cyan("--output, -o")}      Output path for schema (default: .graph/schema.json)
 
 ${c.bold("Examples:")}
   ${c.dim("$")} cartographer init
@@ -855,6 +886,8 @@ ${c.bold("Examples:")}
   ${c.dim("$")} cartographer migrate generate --name add_users
   ${c.dim("$")} cartographer migrate generate --dialect mysql
   ${c.dim("$")} cartographer migrate status
+  ${c.dim("$")} cartographer schema
+  ${c.dim("$")} cartographer schema --output ./schema.json
   ${c.dim("$")} cartographer serve
 `);
 }
@@ -900,6 +933,17 @@ for (const arg of args) {
   }
 }
 
+// Parse --output=X or -o X flag for schema
+let outputPath: string | undefined;
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg?.startsWith("--output=")) {
+    outputPath = arg.split("=")[1];
+  } else if ((arg === "--output" || arg === "-o") && args[i + 1]) {
+    outputPath = args[i + 1];
+  }
+}
+
 switch (command) {
   case "init":
     init();
@@ -938,6 +982,9 @@ switch (command) {
     }
     break;
   }
+  case "schema":
+    schema(outputPath);
+    break;
   case "--help":
   case "-h":
   case undefined:
