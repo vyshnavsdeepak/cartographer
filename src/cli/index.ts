@@ -136,9 +136,14 @@ fields:
 `;
   await writeFile(join(graphPath, ENTITIES_DIR, "example.yaml"), sampleEntity);
 
+  // Generate JSON Schema for VS Code support
+  const schemaPath = join(graphPath, "schema.json");
+  await writeSchema(schemaPath, ["Example"]);
+
   console.log(c.green(`✓ Created ${GRAPH_DIR}/`));
   console.log(`  └─ entities/example.yaml`);
   console.log(`  └─ config.yaml`);
+  console.log(`  └─ schema.json`);
   console.log(c.bold(`\nNext steps:`));
   console.log(`  1. Edit ${c.cyan(`${GRAPH_DIR}/entities/`)} to define your entities`);
   console.log(`  2. Add ${c.cyan("// @" + "graph:YourEntity.model")} comments to your code`);
